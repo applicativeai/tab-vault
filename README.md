@@ -2,6 +2,18 @@
 
 A Chrome extension that saves all your open tabs into one list. The list is merged, de-duplicated and sorted by URL automatically, so there is no manual cleanup.
 
+![Tab Vault showing today's saved tabs, with site chips and a sidebar of views and sessions](docs/screenshot.png)
+
+## How it works
+
+![Open tabs from two windows, including duplicates, become one clean de-duplicated list with one click](docs/how-it-works.svg)
+
+Group by site collapses a big list into one row per website:
+
+![Tab Vault with Group by site turned on](docs/screenshot-grouped.png)
+
+*Screenshots use example tabs.*
+
 ## Install
 
 1. Download this repo (`git clone`, or **Code → Download ZIP** and unzip it).
