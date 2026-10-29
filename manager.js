@@ -46,6 +46,18 @@ const inSession = () => typeof current === 'number';
 const session = () => sessions.find((s) => s.id === current);
 const n = (x) => x.toLocaleString();
 
+// Compact "last saved" age for the row's right edge.
+function age(t, now) {
+  const ms = seen(t);
+  if (!ms) return '—';
+  const d = Math.floor((now - ms) / DAY);
+  if (d < 1) return 'today';
+  if (d < 7) return d + 'd';
+  if (d < 60) return Math.floor(d / 7) + 'w';
+  if (d < 365) return Math.floor(d / 30) + 'mo';
+  return Math.floor(d / 365) + 'y';
+}
+
 async function load() {
   [sessions, commonTabs] = await Promise.all([db.getSessions(), db.getAllTabs()]);
   if (inSession() && !session()) current = 'month';
@@ -67,6 +79,7 @@ function recompute() {
   }
   base = sortList(base);
   document.body.classList.toggle('in-session', inSession());
+  $('#viewTitle').textContent = inSession() ? session().name : TIME_VIEWS.find(([id]) => id === current)[1];
   renderNav(now);
   renderCats();
   filter();
@@ -136,6 +149,7 @@ function buildRows() {
 }
 
 function render() {
+  const now = Date.now();
   const start = Math.max(0, Math.floor(viewport.scrollTop / ROW) - 10);
   const end = Math.min(rows.length, start + Math.ceil(viewport.clientHeight / ROW) + 20);
   let html = '';
@@ -160,21 +174,22 @@ function render() {
       <img src="${favicon(t.url)}" alt="">
       <a href="${esc(t.url)}">${esc(t.title)}</a>
       <span class="url" title="${esc(t.url)}">${esc(shortUrl(t.url))}</span>
+      <span class="age" title="Last saved ${seen(t) ? new Date(seen(t)).toLocaleString() : 'date unknown'}">${age(t, now)}</span>
       <button class="del" title="Remove">✕</button>
     </div>`;
   }
   const emptyMsg = commonTabs.length || sessions.length
-    ? 'Nothing here. Try another view, category or search.'
-    : 'Nothing saved yet. Click the Tab Vault icon to save all open tabs. Restoring? Click Import and pick the newest file in Downloads/TabVault.';
+    ? '<b>Nothing here</b>Try another view, category or search.'
+    : '<b>No tabs saved yet</b>Click the Tab Vault icon in the toolbar to save every open tab. Coming from Session Buddy or restoring a backup? Use Import at the bottom left.';
   spacer.innerHTML = rows.length ? html : `<div class="empty">${emptyMsg}</div>`;
 
   const sites = grouped ? new Set(view.map((t) => meta(t).site)).size : 0;
   const filtered = view.length !== base.length;
   $('#count').textContent =
     (filtered ? `${n(view.length)} of ${n(base.length)} tabs` : `${n(base.length)} tabs`) +
-    (grouped ? ` on ${n(sites)} site${sites === 1 ? '' : 's'}` : '') +
-    (selected.size ? ` · ${n(selected.size)} selected` : '');
-  $('#open').disabled = $('#del').disabled = !selected.size;
+    (grouped ? ` on ${n(sites)} site${sites === 1 ? '' : 's'}` : '');
+  document.body.classList.toggle('selecting', selected.size > 0);
+  $('#selCount').textContent = `${n(selected.size)} selected`;
 }
 
 async function removeKeys(keys) {
@@ -383,13 +398,42 @@ $('#file').onchange = async (e) => {
   e.target.value = '';
   if (!file) return;
   try {
-    const { added, sessions } = await db.importAll(JSON.parse(await file.text()));
-    alert(`Imported ${added} new tabs and ${sessions} sessions.`);
+    const data = JSON.parse(await file.text());
+    const { added, sessions } = data.collections ? await importSessionBuddy(data) : await db.importAll(data);
+    if (added === undefined) return; // cancelled
+    alert(`Imported ${n(added)} new tabs and ${sessions} sessions.`);
     load();
   } catch (err) {
     alert('Import failed: ' + err.message);
   }
 };
+
+// Session Buddy export: let the user pick where each collection goes.
+function importSessionBuddy(data) {
+  const plan = db.readSessionBuddy(data);
+  $('#sbRows').innerHTML = plan
+    .map(
+      (c) => `<div class="sb-row">
+        <span class="t" title="${esc(c.title)}">${esc(c.title)}</span>
+        <span class="c">${n(c.links.length)}</span>
+        <select data-i="${c.i}">
+          <option value="common"${c.target === 'common' ? ' selected' : ''}>Common list</option>
+          <option value="session"${c.target === 'session' ? ' selected' : ''}>Session</option>
+          <option value="skip">Skip</option>
+        </select>
+      </div>`,
+    )
+    .join('');
+  const dlg = $('#sbDialog');
+  dlg.showModal();
+  return new Promise((resolve) => {
+    dlg.onclose = async () => {
+      if (dlg.returnValue !== 'ok') return resolve({});
+      for (const sel of dlg.querySelectorAll('select')) plan[+sel.dataset.i].target = sel.value;
+      resolve(await db.importSessionBuddy(plan));
+    };
+  });
+}
 
 // Refresh when the icon or shortcut saves tabs.
 chrome.runtime.onMessage.addListener((m) => m.type === 'changed' && load());

@@ -3,98 +3,149 @@
 <head>
   <meta charset="utf-8">
   <title>Tab Vault</title>
+  <link rel="icon" href="icons/icon32.png">
   <link rel="stylesheet" href="ui.css">
   <style>
-    body { display: grid; grid-template-columns: 240px 1fr; height: 100vh; overflow: hidden; }
+    body { display: grid; grid-template-columns: 248px 1fr; height: 100vh; overflow: hidden; }
+
+    /* ---------- sidebar ---------- */
     aside { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
-    aside h1 { font-size: 15px; margin: 0; padding: 14px 14px 10px; }
-    .side-actions { padding: 0 10px 10px; }
-    .side-actions button { width: 100%; }
-    #saved { color: var(--accent); margin-left: 8px; }
-    #nav { flex: 1; overflow: auto; padding: 0 6px; }
-    .nav-item { display: flex; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; }
-    .nav-item:hover { background: var(--hover); }
-    .nav-item.active { background: var(--sel); font-weight: 600; }
-    .nav-item .n { color: var(--muted); font-variant-numeric: tabular-nums; }
-    .nav-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; padding: 12px 8px 4px; }
-    .backup { padding: 10px; border-top: 1px solid var(--line); display: flex; gap: 6px; }
-    .backup button { flex: 1; }
-    .backup-status { padding: 10px 10px 0; border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
-    .backup-status + .backup { border-top: 0; }
+    .brand { display: flex; align-items: center; gap: 10px; padding: 16px 16px 12px; }
+    .brand img { width: 26px; height: 26px; }
+    .brand h1 { font-size: 15px; font-weight: 650; margin: 0; letter-spacing: -.01em; }
+    .side-actions { padding: 0 12px 6px; }
+    .side-actions button { width: 100%; text-align: left; display: flex; align-items: center; gap: 8px; }
+    .side-actions button::before { content: "+"; font-size: 16px; line-height: 1; color: var(--accent); font-weight: 600; }
+    #nav { flex: 1; overflow: auto; padding: 0 8px 8px; }
+    .nav-label { color: var(--faint); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; padding: 14px 8px 4px; }
+    .nav-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--radius); cursor: pointer; color: var(--muted); }
+    .nav-item span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .nav-item:hover { background: var(--hover); color: var(--text); }
+    .nav-item.active { background: var(--sel); color: var(--text); font-weight: 600; }
+    .nav-item .n { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--faint); font-weight: 500; }
+    .nav-item.active .n { color: var(--accent); }
+    .backup { border-top: 1px solid var(--line); padding: 10px 12px 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .backup-line { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted); }
+    .backup-line button { padding: 3px 8px; font-size: 12px; }
+
+    /* ---------- main ---------- */
     main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-    header { padding: 10px 14px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-    header input { flex: 1 1 260px; }
-    #status { padding: 6px 14px; font-size: 12px; border-bottom: 1px solid var(--line); }
-    #count { color: var(--muted); }
-    #cats { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 14px; border-bottom: 1px solid var(--line); }
-    .chip { padding: 3px 10px; border-radius: 999px; font-size: 12px; }
-    .chip span { color: var(--muted); margin-left: 2px; }
-    .chip.active { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
-    .chip.active span { color: inherit; opacity: .8; }
-    .toggle[aria-pressed="true"] { background: var(--sel); border-color: var(--accent); }
-    .row.group { cursor: pointer; font-weight: 600; }
-    .row.group .chev { width: 10px; color: var(--muted); }
-    .row.group .site { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .row.group .n { color: var(--muted); font-weight: 400; font-size: 12px; }
-    .row.nested { padding-left: 40px; }
-    #viewport { flex: 1; overflow-y: auto; position: relative; }
-    #spacer { position: relative; }
-    .row {
-      position: absolute; left: 0; right: 0; height: 32px; display: flex; align-items: center; gap: 10px;
-      padding: 0 14px; border-bottom: 1px solid var(--line);
-    }
-    .row:hover { background: var(--hover); }
-    .row.sel { background: var(--sel); }
-    .row img { width: 16px; height: 16px; flex: none; }
-    .row a { color: var(--text); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1 1 auto; min-width: 0; }
-    .row a:hover { text-decoration: underline; }
-    .row .url { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 40%; min-width: 0; font-size: 12px; }
-    .row .del { border: 0; background: none; color: var(--muted); padding: 2px 6px; visibility: hidden; }
-    .row:hover .del { visibility: visible; }
-    .row .del:hover { color: var(--danger); }
-    .empty { padding: 40px; text-align: center; color: var(--muted); }
+    header { padding: 14px 20px 10px; display: flex; gap: 8px; align-items: center; }
+    header input { flex: 1 1 auto; }
+    .toggle[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+    .title-row { display: flex; align-items: center; gap: 8px; padding: 6px 20px 0; min-height: 34px; }
+    #viewTitle { font-size: 18px; font-weight: 650; margin: 0; letter-spacing: -.015em; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .session-only { display: none; }
     body.in-session .session-only { display: inline-block; }
+    #cats { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 20px; }
+    .chip { padding: 4px 11px; border-radius: 999px; font-size: 12px; background: var(--bg); }
+    .chip span { color: var(--faint); margin-left: 3px; font-variant-numeric: tabular-nums; }
+    .chip.active { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+    .chip.active span { color: inherit; opacity: .75; }
+    #status { display: flex; align-items: center; gap: 10px; padding: 0 20px; height: 36px; border-bottom: 1px solid var(--line); font-size: 12px; }
+    #count { color: var(--muted); }
+    #saved { color: var(--accent); font-weight: 500; }
+    #status .grow { flex: 1; }
+    #selActions { display: none; align-items: center; gap: 6px; }
+    body.selecting #selActions { display: flex; }
+    #selActions button, #selAll { padding: 3px 10px; font-size: 12px; }
+    #selCount { font-weight: 600; color: var(--accent); margin-right: 4px; }
+
+    /* ---------- rows ---------- */
+    #viewport { flex: 1; overflow-y: auto; position: relative; }
+    #spacer { position: relative; }
+    .row { position: absolute; left: 8px; right: 8px; height: 34px; display: flex; align-items: center; gap: 10px; padding: 0 12px; border-radius: 6px; }
+    .row:hover { background: var(--hover); }
+    .row.sel { background: var(--sel); }
+    .row input[type=checkbox] { margin: 0; opacity: 0; flex: none; }
+    .row:hover input[type=checkbox], body.selecting .row input[type=checkbox] { opacity: 1; }
+    .row img { width: 16px; height: 16px; flex: none; border-radius: 3px; }
+    .row a { color: var(--text); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1 1 auto; min-width: 0; }
+    .row a:hover { color: var(--accent); }
+    .row .url { color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 36%; min-width: 0; font-size: 12px; }
+    .row .age { color: var(--faint); font-size: 11px; width: 34px; text-align: right; flex: none; font-variant-numeric: tabular-nums; }
+    .row .del { border: 0; background: none; color: var(--faint); padding: 2px 6px; opacity: 0; flex: none; }
+    .row:hover .del { opacity: 1; }
+    .row .del:hover { color: var(--danger); background: none; }
+    .row.group { cursor: pointer; font-weight: 600; }
+    .row.group .chev { width: 10px; color: var(--faint); font-size: 10px; flex: none; }
+    .row.group .site { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .row.group .n { color: var(--muted); font-weight: 500; font-size: 11px; background: var(--hover); border-radius: 999px; padding: 1px 8px; }
+    .row.group:hover .n { background: var(--bg); }
+    .row.nested { left: 34px; }
+    .empty { padding: 80px 40px; text-align: center; color: var(--muted); max-width: 440px; margin: 0 auto; }
+    .empty b { display: block; color: var(--text); font-size: 15px; margin-bottom: 6px; }
+
+    /* ---------- dialog ---------- */
+    dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--bg); color: var(--text); padding: 22px 24px; width: min(560px, 92vw); box-shadow: 0 20px 60px rgb(0 0 0 / .25); }
+    dialog::backdrop { background: rgb(20 15 35 / .4); backdrop-filter: blur(2px); }
+    dialog h2 { font-size: 17px; margin: 0 0 4px; }
+    dialog .hint { color: var(--muted); margin: 0 0 14px; }
+    #sbRows { max-height: 60vh; overflow: auto; }
+    .sb-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+    .sb-row .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sb-row .c { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
   </style>
 </head>
 <body>
   <aside>
-    <h1>Tab Vault</h1>
+    <div class="brand"><img src="icons/icon48.png" alt=""><h1>Tab Vault</h1></div>
     <div class="side-actions">
-      <button id="saveSession" title="Save every open tab as its own named session, kept apart from the common list">Save tabs as session…</button>
+      <button id="saveSession" title="Save every open tab as its own named session, kept apart from the common list">Save tabs as session</button>
     </div>
     <div id="nav"></div>
-    <div class="backup-status">
-      <span id="lastBackup"></span>
-      <button id="backupNow" title="Save a backup to Downloads/TabVault now">Back up now</button>
-    </div>
     <div class="backup">
+      <div class="backup-line">
+        <span id="lastBackup"></span>
+        <button id="backupNow" class="ghost" title="Save a backup to Downloads/TabVault now">Back up now</button>
+      </div>
       <button id="export" title="Download everything as a JSON file">Export</button>
-      <button id="import" title="Merge a backup JSON file into your data">Import</button>
+      <button id="import" title="Merge a Tab Vault backup or a Session Buddy export into your data">Import</button>
       <input type="file" id="file" accept=".json,application/json" hidden>
     </div>
   </aside>
   <main>
     <header>
-      <input type="search" id="q" placeholder="Search title or URL…  ( / )" autofocus>
+      <input type="search" id="q" placeholder="Search titles and URLs   /" autofocus>
       <select id="sort" title="Sort order">
-        <option value="url">Sort: URL A→Z</option>
-        <option value="newest">Sort: Newest saved</option>
-        <option value="oldest">Sort: Oldest saved</option>
+        <option value="url">URL A→Z</option>
+        <option value="newest">Newest first</option>
+        <option value="oldest">Oldest first</option>
       </select>
       <button id="group" class="toggle" title="Collapse tabs into one row per website">Group by site</button>
-      <button id="selAll">Select all</button>
-      <button id="selNone">Clear</button>
-      <button id="open">Open selected</button>
-      <button id="del" class="danger">Delete selected</button>
-      <button id="merge" class="session-only">Merge into common list</button>
-      <button id="rename" class="session-only">Rename</button>
-      <button id="delSession" class="session-only danger">Delete session</button>
     </header>
+    <div class="title-row">
+      <h2 id="viewTitle"></h2>
+      <button id="merge" class="session-only">Merge into common list</button>
+      <button id="rename" class="session-only ghost">Rename</button>
+      <button id="delSession" class="session-only ghost danger">Delete</button>
+    </div>
     <div id="cats"></div>
-    <div id="status"><span id="count"></span><span id="saved"></span></div>
+    <div id="status">
+      <span id="count"></span><span id="saved"></span>
+      <span class="grow"></span>
+      <span id="selActions">
+        <span id="selCount"></span>
+        <button id="open">Open</button>
+        <button id="del" class="danger">Delete</button>
+        <button id="selNone" class="ghost">Clear</button>
+      </span>
+      <button id="selAll" class="ghost">Select all</button>
+    </div>
     <div id="viewport"><div id="spacer"></div></div>
   </main>
+  <dialog id="sbDialog">
+    <form method="dialog">
+      <h2>Import from Session Buddy</h2>
+      <p class="hint">Choose where each collection goes. Duplicates are merged automatically.</p>
+      <div id="sbRows"></div>
+      <div class="dialog-actions">
+        <button value="cancel">Cancel</button>
+        <button value="ok" class="primary">Import</button>
+      </div>
+    </form>
+  </dialog>
   <script type="module" src="manager.js"></script>
 </body>
 </html>

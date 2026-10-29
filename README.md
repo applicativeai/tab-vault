@@ -28,6 +28,10 @@ In the list:
 - **Open:** click a title to open it, or Cmd/Ctrl-click to open it in the background.
 - **Select:** click a row, or Shift-click to select a range.
 
+## Coming from Session Buddy
+
+In Session Buddy, export everything as JSON. Then click **Import** in Tab Vault and pick that file. For each collection, choose whether it goes into the common list, becomes a session, or is skipped. Session Buddy doesn't store dates for links, so imported links without a date go to the Archive.
+
 ## Duplicates
 
 Two links count as the same page when they differ only in:

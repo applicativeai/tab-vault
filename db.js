@@ -151,9 +151,9 @@ export async function deleteTabs(keys) {
 
 // ---------- sessions ----------
 
-export async function addSession(name, entries) {
+export async function addSession(name, entries, created = Date.now()) {
   const [s, tx] = await store('sessions', 'readwrite');
-  s.add({ name, created: Date.now(), tabs: entries });
+  s.add({ name, created, tabs: entries });
   await done(tx);
 }
 
@@ -280,4 +280,41 @@ export function category(url) {
   if (h === 'mail.google.com') return 'gmail';
   if (h === 'drive.google.com' || h === 'docs.google.com') return 'drive';
   return 'other';
+}
+
+// ---------- Session Buddy import ----------
+
+// Session Buddy names unsaved sessions by date, e.g. "Oct 24, 2026  •  12:33 PM".
+function sessionBuddyDate(title) {
+  if (!/^[A-Z][a-z]{2} \d{1,2}, \d{4}/.test(title ?? '')) return null;
+  const ms = Date.parse(title.replace(/\s*•\s*/, ' '));
+  return Number.isNaN(ms) ? null : ms;
+}
+
+// One row per collection with a suggested target: dated saves and very large
+// collections (a merged main list) go to the common list; named ones become sessions.
+export function readSessionBuddy(data) {
+  return (data.collections ?? []).map((c, i) => {
+    const links = (c.folders ?? []).flatMap((f) => f.links ?? []);
+    const when = sessionBuddyDate(c.title);
+    return { i, title: c.title || 'Untitled', links, when, target: when || links.length >= 1000 ? 'common' : 'session' };
+  });
+}
+
+// Links without a known date get time 0, so they land in the Archive rather than "recent".
+export async function importSessionBuddy(plan) {
+  let added = 0;
+  let sessions = 0;
+  const base = Date.now();
+  for (const c of plan) {
+    if (c.target === 'skip') continue;
+    const entries = prepare(c.links.map((l) => ({ url: l.url, title: l.title, added: c.when ?? 0 })));
+    if (c.target === 'common') {
+      added += (await mergeIntoCommon(entries)).added;
+    } else {
+      await addSession(c.title, entries, c.when ?? base + c.i); // created must be unique per session
+      sessions++;
+    }
+  }
+  return { added, sessions };
 }
