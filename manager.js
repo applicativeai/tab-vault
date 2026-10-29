@@ -20,8 +20,9 @@ const TIME_VIEWS = [
   ['everything', 'All time', () => true],
 ];
 
-let current = 'month'; // a TIME_VIEWS id, or a session id (number)
-let cat = 'all'; // 'all' or a db.CATEGORIES id
+const DEFAULT_VIEW = 'today';
+let current = DEFAULT_VIEW; // a TIME_VIEWS id, or a session id (number)
+let cat = 'all'; // chip filter: 'all', a db.CATEGORIES id, or a site like 'github.com'
 let grouped = false;
 let expanded = new Set(); // sites opened while grouped
 let sessions = [];
@@ -35,9 +36,24 @@ let lastClicked = -1;
 const info = new WeakMap(); // entry -> { hay, cat, site }, computed once per entry
 function meta(t) {
   let m = info.get(t);
-  if (!m) info.set(t, (m = { hay: (t.title + ' ' + t.url).toLowerCase(), cat: db.category(t.url), site: db.siteOf(t.url) }));
+  if (!m) {
+    const site = db.siteOf(t.url);
+    const c = db.category(t.url);
+    m = {
+      hay: (t.title + ' ' + t.url).toLowerCase(),
+      site,
+      // Chip key: the category where one applies (splits Google into Search, Gmail, Drive), else the site.
+      chip: c === 'other' ? site : c,
+      // A→Z by main site, so subdomains sit together; local hosts and IPs go last.
+      siteKey: (db.isLocalSite(site) ? '~' : '') + site + '\u0000' + t.sortKey,
+    };
+    info.set(t, m);
+  }
   return m;
 }
+const CAT_NAMES = Object.fromEntries(db.CATEGORIES);
+const TOP_CHIPS = 10;
+let titleCounts = new Map(); // title -> how many tabs in the current list share it
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const favicon = (url) => `/_favicon/?pageUrl=${encodeURIComponent(url)}&size=16`;
@@ -46,10 +62,23 @@ const inSession = () => typeof current === 'number';
 const session = () => sessions.find((s) => s.id === current);
 const n = (x) => x.toLocaleString();
 
+// The distinguishing end of a URL, shown next to titles many tabs share ("solveit" ×284).
+function urlTail(url) {
+  try {
+    const u = new URL(url);
+    let s = u.pathname.split('/').filter(Boolean).slice(-2).join('/') + u.search + u.hash;
+    if (!s) s = u.hostname.split('.')[0];
+    try { s = decodeURIComponent(s); } catch {}
+    return s.length > 60 ? '…' + s.slice(-59) : s;
+  } catch {
+    return '';
+  }
+}
+
 // Compact "last saved" age for the row's right edge.
 function age(t, now) {
   const ms = seen(t);
-  if (!ms) return '—';
+  if (!ms) return ''; // imported without a date
   const d = Math.floor((now - ms) / DAY);
   if (d < 1) return 'today';
   if (d < 7) return d + 'd';
@@ -60,11 +89,12 @@ function age(t, now) {
 
 async function load() {
   [sessions, commonTabs] = await Promise.all([db.getSessions(), db.getAllTabs()]);
-  if (inSession() && !session()) current = 'month';
+  if (inSession() && !session()) current = DEFAULT_VIEW;
   const keys = new Set(commonTabs.concat(sessions.flatMap((s) => s.tabs)).map((t) => t.key));
   selected = new Set([...selected].filter((k) => keys.has(k)));
   const last = await db.getMeta('lastBackup');
   $('#lastBackup').textContent = last ? `Backed up ${new Date(last).toLocaleDateString()}` : 'No backup yet';
+  $('#lastBackup').title = 'A backup is saved to Downloads/TabVault every 7 days';
   recompute();
 }
 
@@ -77,8 +107,12 @@ function recompute() {
     const test = TIME_VIEWS.find(([id]) => id === current)[2];
     base = commonTabs.filter((t) => test(t, now));
   }
+  if (opts.source !== 'all') base = base.filter((t) => !t.auto === (opts.source === 'mine'));
   base = sortList(base);
+  titleCounts = new Map();
+  for (const t of base) titleCounts.set(t.title, (titleCounts.get(t.title) ?? 0) + 1);
   document.body.classList.toggle('in-session', inSession());
+  $('#q').placeholder = `Search ${n(base.length)} tab${base.length === 1 ? '' : 's'}   /`;
   $('#viewTitle').textContent = inSession() ? session().name : TIME_VIEWS.find(([id]) => id === current)[1];
   renderNav(now);
   renderCats();
@@ -87,8 +121,8 @@ function recompute() {
 
 // Tabs saved in the same click share a time, so ties fall back to URL order.
 function sortList(list) {
-  const mode = $('#sort').value;
-  const out = [...list].sort(db.bySortKey);
+  const mode = opts.sort;
+  const out = [...list].sort((a, b) => (meta(a).siteKey < meta(b).siteKey ? -1 : meta(a).siteKey > meta(b).siteKey ? 1 : 0));
   if (mode !== 'url') {
     const dir = mode === 'newest' ? -1 : 1;
     out.sort((a, b) => dir * (seen(a) - seen(b)));
@@ -96,27 +130,40 @@ function sortList(list) {
   return out;
 }
 
+const icon = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const ICONS = {
+  today: icon('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'),
+  week: icon('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>'),
+  month: icon('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M8 14h.01M12 14h.01M16 14h.01M8 17.5h.01M12 17.5h.01"/>'),
+  archive: icon('<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9M10 13h4"/>'),
+  everything: icon('<path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 13 9 5 9-5"/>'),
+  session: icon('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
+};
+
 function renderNav(now) {
-  const item = (id, name, count) =>
-    `<div class="nav-item${id === current ? ' active' : ''}" data-id="${id}"><span>${esc(name)}</span><span class="n">${n(count)}</span></div>`;
+  const item = (id, name, count, svg) =>
+    `<div class="nav-item${id === current ? ' active' : ''}" data-id="${id}">${svg}<span class="name">${esc(name)}</span><span class="n">${n(count)}</span></div>`;
   $('#nav').innerHTML =
-    '<div class="nav-label">Saved tabs</div>' +
-    TIME_VIEWS.map(([id, name, test]) => item(id, name, commonTabs.filter((t) => test(t, now)).length)).join('') +
-    (sessions.length ? '<div class="nav-label">Sessions</div>' : '') +
-    sessions.map((s) => item(s.id, s.name, s.tabs.length)).join('');
+    '<div class="menu-label">Saved tabs</div>' +
+    TIME_VIEWS.map(([id, name, test]) => item(id, name, commonTabs.filter((t) => test(t, now)).length, ICONS[id])).join('') +
+    (sessions.length ? '<div class="menu-label">Sessions</div>' : '') +
+    sessions.map((s) => item(s.id, s.name, s.tabs.length, ICONS.session)).join('');
 }
 
+// Chips for the biggest sites/categories in the current list; no row when there's only one.
 function renderCats() {
-  const counts = { all: base.length };
-  for (const t of base) counts[meta(t).cat] = (counts[meta(t).cat] ?? 0) + 1;
-  $('#cats').innerHTML = [['all', 'All'], ...db.CATEGORIES]
-    .map(([id, name]) => `<button class="chip${id === cat ? ' active' : ''}" data-cat="${id}">${name} <span>${n(counts[id] ?? 0)}</span></button>`)
-    .join('');
+  const counts = new Map();
+  for (const t of base) counts.set(meta(t).chip, (counts.get(meta(t).chip) ?? 0) + 1);
+  const top = [...counts].sort((a, b) => b[1] - a[1]).slice(0, TOP_CHIPS).map(([id]) => id);
+  if (cat !== 'all' && !top.includes(cat)) top.push(cat);
+  const chip = (id, label, count) => `<button class="chip${id === cat ? ' active' : ''}" data-cat="${esc(id)}">${esc(label)} <span>${n(count)}</span></button>`;
+  $('#cats').innerHTML = counts.size <= 1 && cat === 'all' ? '' :
+    chip('all', 'All', base.length) + top.map((id) => chip(id, CAT_NAMES[id] ?? id, counts.get(id) ?? 0)).join('');
 }
 
 function filter() {
   const terms = $('#q').value.toLowerCase().split(/\s+/).filter(Boolean);
-  view = base.filter((t) => (cat === 'all' || meta(t).cat === cat) && terms.every((w) => meta(t).hay.includes(w)));
+  view = base.filter((t) => (cat === 'all' || meta(t).chip === cat) && terms.every((w) => meta(t).hay.includes(w)));
   buildRows();
 }
 
@@ -159,7 +206,7 @@ function render() {
       const nSel = r.tabs.filter((t) => selected.has(t.key)).length;
       html += `<div class="row group${nSel === r.tabs.length ? ' sel' : ''}" style="top:${i * ROW}px" data-i="${i}">
         <input type="checkbox"${nSel === r.tabs.length ? ' checked' : ''}>
-        <span class="chev">${r.open ? '▾' : '▸'}</span>
+        <span class="chev${r.open ? ' open' : ''}">›</span>
         <img src="${favicon(r.tabs[0].url)}" alt="">
         <span class="site">${esc(r.site)}</span>
         <span class="n">${n(r.tabs.length)}${nSel ? ` · ${n(nSel)} selected` : ''}</span>
@@ -171,16 +218,21 @@ function render() {
     const sel = selected.has(t.key);
     html += `<div class="row${sel ? ' sel' : ''}${r.nested ? ' nested' : ''}" style="top:${i * ROW}px" data-i="${i}">
       <input type="checkbox"${sel ? ' checked' : ''}>
+      ${grouped && !r.nested ? '<span class="chev"></span>' : ''}
       <img src="${favicon(t.url)}" alt="">
-      <a href="${esc(t.url)}">${esc(t.title)}</a>
+      <a href="${esc(t.url)}">${esc(t.title)}${titleCounts.get(t.title) >= 3 ? `<span class="hint">${esc(urlTail(t.url))}</span>` : ''}</a>
+      ${t.auto ? '<span class="tag" title="Saved by the hourly auto-save, not by you">auto</span>' : ''}
       <span class="url" title="${esc(t.url)}">${esc(shortUrl(t.url))}</span>
       <span class="age" title="Last saved ${seen(t) ? new Date(seen(t)).toLocaleString() : 'date unknown'}">${age(t, now)}</span>
       <button class="del" title="Remove">✕</button>
     </div>`;
   }
-  const emptyMsg = commonTabs.length || sessions.length
-    ? '<b>Nothing here</b>Try another view, category or search.'
-    : '<b>No tabs saved yet</b>Click the Tab Vault icon in the toolbar to save every open tab. Coming from Session Buddy or restoring a backup? Use Import at the bottom left.';
+  const searching = $('#q').value.trim() || cat !== 'all';
+  const emptyMsg = !commonTabs.length && !sessions.length
+    ? '<b>No tabs saved yet</b>Click the Tab Vault icon in the toolbar to save every open tab. Coming from Session Buddy or restoring a backup? Use Import at the bottom left, or drop the file here.'
+    : searching || inSession() || current === 'everything'
+      ? '<b>No matches</b>Try another search or category.'
+      : `<b>Nothing in ${esc(TIME_VIEWS.find(([id]) => id === current)[1].toLowerCase())}</b>Click the Tab Vault icon to save your open tabs.<br><button data-view="everything">Show all time</button>`;
   spacer.innerHTML = rows.length ? html : `<div class="empty">${emptyMsg}</div>`;
 
   const sites = grouped ? new Set(view.map((t) => meta(t).site)).size : 0;
@@ -190,18 +242,49 @@ function render() {
     (grouped ? ` on ${n(sites)} site${sites === 1 ? '' : 's'}` : '');
   document.body.classList.toggle('selecting', selected.size > 0);
   $('#selCount').textContent = `${n(selected.size)} selected`;
+  const allSelected = view.every((t) => selected.has(t.key));
+  $('#selAll').hidden = allSelected;
+  $('#selAll').textContent = `Select all ${n(view.length)}`;
 }
 
 async function removeKeys(keys) {
   const drop = new Set(keys);
+  let undo;
   if (inSession()) {
-    const s = session();
-    await db.putSession({ ...s, tabs: s.tabs.filter((t) => !drop.has(t.key)) });
+    const before = session();
+    await db.putSession({ ...before, tabs: before.tabs.filter((t) => !drop.has(t.key)) });
+    undo = () => db.putSession(before);
   } else {
+    const removed = commonTabs.filter((t) => drop.has(t.key));
     await db.deleteTabs(keys);
+    undo = () => db.mergeIntoCommon(removed);
   }
   for (const k of keys) selected.delete(k);
+  showUndo(`Deleted ${n(keys.length)} tab${keys.length === 1 ? '' : 's'}`, undo);
   await load();
+}
+
+// Every delete is undoable for 10 seconds (button or Cmd/Ctrl+Z). Only the latest delete.
+let undoAction = null;
+let undoTimer;
+function showUndo(message, undo) {
+  undoAction = undo;
+  $('#toastMsg').textContent = message;
+  $('#toast').classList.add('show');
+  clearTimeout(undoTimer);
+  undoTimer = setTimeout(hideUndo, 10000);
+}
+function hideUndo() {
+  undoAction = null;
+  $('#toast').classList.remove('show');
+}
+async function runUndo() {
+  const undo = undoAction;
+  hideUndo();
+  if (undo) {
+    await undo();
+    await load();
+  }
 }
 
 function openUrls(urls, active = false) {
@@ -239,7 +322,13 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     $('#q').focus();
   }
+  if (e.key === '[' && !e.target.matches('input')) toggleSidebar();
+  if (e.key === 'Escape' && selected.size) {
+    selected.clear();
+    render();
+  }
 });
+spacer.addEventListener('click', (e) => e.target.dataset.view && switchView(e.target.dataset.view));
 
 function onRowClick(e) {
   const row = e.target.closest('.row');
@@ -249,7 +338,7 @@ function onRowClick(e) {
 
   if (r.site) {
     if (e.target.closest('.del')) {
-      if (confirm(`Delete all ${r.tabs.length} tabs from ${r.site}?`)) removeKeys(r.tabs.map((t) => t.key));
+      removeKeys(r.tabs.map((t) => t.key));
     } else if (e.button !== 0) {
       return;
     } else if (e.target.matches('input[type=checkbox]')) {
@@ -297,12 +386,15 @@ spacer.addEventListener('mousedown', (e) => e.shiftKey && e.preventDefault()); /
 $('#nav').addEventListener('click', (e) => {
   const item = e.target.closest('.nav-item');
   if (!item) return;
-  const id = item.dataset.id;
+  switchView(item.dataset.id);
+});
+
+function switchView(id) {
   current = /^\d+$/.test(id) ? +id : id;
   $('#q').value = '';
   resetPosition();
   recompute();
-});
+}
 
 $('#cats').addEventListener('click', (e) => {
   const chip = e.target.closest('.chip');
@@ -327,24 +419,44 @@ const setPref = (k, v) => {
   } catch {}
 };
 
-$('#sort').value = pref('sort', 'url');
-$('#sort').onchange = () => {
-  setPref('sort', $('#sort').value);
+// ---------- view controls (all visible in the header) ----------
+const DEFAULTS = { source: 'all', sort: 'url', grouped: '0', urls: '1' };
+const opts = Object.fromEntries(Object.keys(DEFAULTS).map((k) => [k, pref(k, DEFAULTS[k])]));
+
+function applyOpts() {
+  $('#source').value = opts.source;
+  $('#sort').value = opts.sort;
+  grouped = opts.grouped === '1';
+  $('#group').setAttribute('aria-pressed', grouped);
+  $('#urls').setAttribute('aria-pressed', opts.urls === '1');
+  document.body.classList.toggle('hide-urls', opts.urls !== '1');
+}
+
+function setOpts(changes) {
+  Object.assign(opts, changes);
+  for (const k in changes) setPref(k, changes[k]);
+  applyOpts();
   lastClicked = -1;
   viewport.scrollTop = 0;
   recompute();
-};
+}
 
-grouped = pref('grouped', '0') === '1';
-$('#group').setAttribute('aria-pressed', grouped);
-$('#group').onclick = () => {
-  grouped = !grouped;
-  setPref('grouped', grouped ? '1' : '0');
-  $('#group').setAttribute('aria-pressed', grouped);
-  lastClicked = -1;
-  viewport.scrollTop = 0;
-  buildRows();
+applyOpts();
+for (const id of ['source', 'sort']) $('#' + id).onchange = (e) => setOpts({ [id]: e.target.value });
+$('#group').onclick = () => setOpts({ grouped: grouped ? '0' : '1' });
+
+// Sidebar toggle: button or the [ key. Remembered.
+// One toggle, fixed in the top-left corner, so it's in the same spot whether the sidebar is open or not.
+const applySidebar = (show) => document.body.classList.toggle('no-sidebar', !show);
+applySidebar(pref('sidebar', '1') === '1');
+const toggleSidebar = () => {
+  const show = document.body.classList.contains('no-sidebar');
+  setPref('sidebar', show ? '1' : '0');
+  applySidebar(show);
+  render();
 };
+$('#sidebarToggle').onclick = toggleSidebar;
+$('#urls').onclick = () => setOpts({ urls: opts.urls === '1' ? '0' : '1' });
 
 $('#selAll').onclick = () => {
   view.forEach((t) => selected.add(t.key));
@@ -355,9 +467,14 @@ $('#selNone').onclick = () => {
   render();
 };
 $('#open').onclick = () => openUrls(base.filter((t) => selected.has(t.key)).map((t) => t.url));
-$('#del').onclick = () => {
-  if (confirm(`Delete ${selected.size} tabs from this list?`)) removeKeys([...selected]);
-};
+$('#del').onclick = () => removeKeys([...selected]);
+$('#undo').onclick = runUndo;
+document.addEventListener('keydown', (e) => {
+  if (undoAction && (e.metaKey || e.ctrlKey) && e.key === 'z' && document.activeElement !== $('#q')) {
+    e.preventDefault();
+    runUndo();
+  }
+});
 
 $('#merge').onclick = async () => {
   const { added, dupes } = await db.mergeIntoCommon(session().tabs);
@@ -372,9 +489,10 @@ $('#rename').onclick = async () => {
   }
 };
 $('#delSession').onclick = async () => {
-  if (!confirm(`Delete session "${session().name}"?`)) return;
-  await db.deleteSession(current);
-  current = 'month';
+  const s = session();
+  await db.deleteSession(s.id);
+  showUndo(`Deleted session "${s.name}"`, () => db.putSession(s));
+  current = DEFAULT_VIEW;
   load();
 };
 
@@ -393,10 +511,26 @@ $('#backupNow').onclick = async () => {
   if (!r?.ok) alert('Backup failed: ' + (r?.error ?? 'unknown error'));
 };
 $('#import').onclick = () => $('#file').click();
-$('#file').onchange = async (e) => {
+$('#file').onchange = (e) => {
   const file = e.target.files[0];
   e.target.value = '';
-  if (!file) return;
+  if (file) importFile(file);
+};
+
+// Dropping a backup or Session Buddy file anywhere on the page imports it too.
+document.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  document.body.classList.add('dropping');
+});
+document.addEventListener('dragleave', (e) => e.relatedTarget || document.body.classList.remove('dropping'));
+document.addEventListener('drop', (e) => {
+  e.preventDefault();
+  document.body.classList.remove('dropping');
+  const file = e.dataTransfer.files[0];
+  if (file) importFile(file);
+});
+
+async function importFile(file) {
   try {
     const data = JSON.parse(await file.text());
     const { added, sessions } = data.collections ? await importSessionBuddy(data) : await db.importAll(data);
@@ -406,7 +540,7 @@ $('#file').onchange = async (e) => {
   } catch (err) {
     alert('Import failed: ' + err.message);
   }
-};
+}
 
 // Session Buddy export: let the user pick where each collection goes.
 function importSessionBuddy(data) {

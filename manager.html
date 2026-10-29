@@ -6,77 +6,115 @@
   <link rel="icon" href="icons/icon32.png">
   <link rel="stylesheet" href="ui.css">
   <style>
-    body { display: grid; grid-template-columns: 248px 1fr; height: 100vh; overflow: hidden; }
+    body { display: grid; grid-template-columns: 252px 1fr; height: 100vh; overflow: hidden; }
+    svg { flex: none; }
 
-    /* ---------- sidebar ---------- */
+    /* ---------- sidebar toggle: one button, fixed in the same spot open or closed ---------- */
+    /* The logo is the toggle. */
+    #sidebarToggle { position: fixed; top: 14px; left: 12px; z-index: 5; width: 32px; height: 32px; padding: 0; display: grid; place-items: center; border-color: transparent; background: none; }
+    #sidebarToggle:hover { background: var(--hover); }
+    #sidebarToggle img { width: 24px; height: 24px; transition: transform .15s; }
+    #sidebarToggle:active img { transform: scale(.92); }
+    body.no-sidebar { grid-template-columns: 0 1fr; }
+    body.no-sidebar aside { visibility: hidden; }
+    body.no-sidebar header { padding-left: 56px; }
+    body.no-sidebar #toast { left: 50%; }
+
+    /* ---------- sidebar: views, sessions, backup ---------- */
     aside { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
-    .brand { display: flex; align-items: center; gap: 10px; padding: 16px 16px 12px; }
-    .brand img { width: 26px; height: 26px; }
-    .brand h1 { font-size: 15px; font-weight: 650; margin: 0; letter-spacing: -.01em; }
-    .side-actions { padding: 0 12px 6px; }
-    .side-actions button { width: 100%; text-align: left; display: flex; align-items: center; gap: 8px; }
-    .side-actions button::before { content: "+"; font-size: 16px; line-height: 1; color: var(--accent); font-weight: 600; }
-    #nav { flex: 1; overflow: auto; padding: 0 8px 8px; }
-    .nav-label { color: var(--faint); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; padding: 14px 8px 4px; }
-    .nav-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--radius); cursor: pointer; color: var(--muted); }
-    .nav-item span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .brand { display: flex; align-items: center; height: 60px; padding-left: 50px; }
+    .brand h1 { font-size: 14px; font-weight: 650; margin: 0; letter-spacing: -.01em; }
+    .side-actions { padding: 2px 12px 8px; }
+    .side-actions button { width: 100%; display: flex; align-items: center; justify-content: center; gap: 7px; height: 34px; font-weight: 500; background: var(--bg); box-shadow: 0 1px 2px rgb(0 0 0 / .05); }
+    .side-actions svg { width: 15px; height: 15px; color: var(--accent); }
+    #nav { flex: 1; overflow: auto; padding: 0 10px 10px; }
+    .menu-label { color: var(--faint); font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .07em; padding: 16px 8px 6px; }
+    .nav-item { display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 8px; border-radius: 8px; cursor: pointer; color: var(--muted); }
+    .nav-item svg { width: 16px; height: 16px; opacity: .8; }
+    .nav-item .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .nav-item:hover { background: var(--hover); color: var(--text); }
-    .nav-item.active { background: var(--sel); color: var(--text); font-weight: 600; }
+    .nav-item.active { background: var(--bg); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgb(0 0 0 / .06), 0 0 0 1px var(--line); }
+    .nav-item.active svg { color: var(--accent); opacity: 1; }
     .nav-item .n { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--faint); font-weight: 500; }
     .nav-item.active .n { color: var(--accent); }
-    .backup { border-top: 1px solid var(--line); padding: 10px 12px 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-    .backup-line { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted); }
+    .backup { border-top: 1px solid var(--line); padding: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .backup-line { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); padding: 0 2px 4px; }
     .backup-line button { padding: 3px 8px; font-size: 12px; }
+    .backup > button { height: 32px; font-size: 12.5px; background: var(--bg); }
 
-    /* ---------- main ---------- */
+    /* ---------- header: search and every view control, all visible ---------- */
     main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-    header { padding: 14px 20px 10px; display: flex; gap: 8px; align-items: center; }
-    header input { flex: 1 1 auto; }
-    .toggle[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
-    .title-row { display: flex; align-items: center; gap: 8px; padding: 6px 20px 0; min-height: 34px; }
-    #viewTitle { font-size: 18px; font-weight: 650; margin: 0; letter-spacing: -.015em; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-height: 60px; padding: 12px 24px; border-bottom: 1px solid var(--line); }
+    header input { flex: 1 1 220px; height: 36px; }
+    header select, header .toggle { height: 36px; }
+    .toggle { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+    .toggle svg { width: 15px; height: 15px; }
+    .toggle[aria-pressed="true"] { background: var(--accent-soft); border-color: transparent; color: var(--accent); font-weight: 500; }
+    .title-row { display: flex; align-items: baseline; gap: 10px; padding: 18px 24px 0; }
+    #viewTitle { font-size: 22px; font-weight: 700; margin: 0; letter-spacing: -.02em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #count { color: var(--faint); font-size: 13px; flex: 1; white-space: nowrap; }
+    #saved { color: var(--accent); font-weight: 500; font-size: 12px; white-space: nowrap; }
+    .title-row button { align-self: center; }
     .session-only { display: none; }
     body.in-session .session-only { display: inline-block; }
-    #cats { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 20px; }
-    .chip { padding: 4px 11px; border-radius: 999px; font-size: 12px; background: var(--bg); }
-    .chip span { color: var(--faint); margin-left: 3px; font-variant-numeric: tabular-nums; }
-    .chip.active { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
-    .chip.active span { color: inherit; opacity: .75; }
-    #status { display: flex; align-items: center; gap: 10px; padding: 0 20px; height: 36px; border-bottom: 1px solid var(--line); font-size: 12px; }
-    #count { color: var(--muted); }
-    #saved { color: var(--accent); font-weight: 500; }
-    #status .grow { flex: 1; }
-    #selActions { display: none; align-items: center; gap: 6px; }
-    body.selecting #selActions { display: flex; }
-    #selActions button, #selAll { padding: 3px 10px; font-size: 12px; }
-    #selCount { font-weight: 600; color: var(--accent); margin-right: 4px; }
+    #cats { display: flex; flex-wrap: wrap; gap: 6px; padding: 14px 24px 14px; }
+    #cats:empty { display: none; }
+    .chip { height: 28px; padding: 0 12px; border-radius: 999px; font-size: 12px; background: var(--bg); color: var(--muted); }
+    .chip:hover { color: var(--text); }
+    .chip span { color: var(--faint); margin-left: 4px; font-variant-numeric: tabular-nums; }
+    .chip.active { background: var(--text); border-color: var(--text); color: var(--bg); font-weight: 500; }
+    .chip.active span { color: inherit; opacity: .6; }
+    /* Selection actions take a row only while something is selected. */
+    #status { display: none; align-items: center; gap: 8px; padding: 0 24px; height: 44px; font-size: 12px; }
+    body.selecting #status { display: flex; }
+    #selActions { display: flex; align-items: center; gap: 6px; }
+    #selActions button { height: 28px; padding: 0 12px; font-size: 12px; }
+    #selAll { align-self: center; height: 28px; padding: 0 10px; font-size: 12px; }
+    #selActions #open { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 500; }
+    #selCount { font-weight: 600; color: var(--text); margin-right: 4px; }
 
     /* ---------- rows ---------- */
-    #viewport { flex: 1; overflow-y: auto; position: relative; }
-    #spacer { position: relative; }
-    .row { position: absolute; left: 8px; right: 8px; height: 34px; display: flex; align-items: center; gap: 10px; padding: 0 12px; border-radius: 6px; }
+    #viewport { flex: 1; overflow-y: auto; position: relative; border-top: 1px solid var(--line); }
+    #spacer { position: relative; margin-top: 6px; }
+    .row { position: absolute; left: 12px; right: 12px; height: 38px; display: flex; align-items: center; gap: 12px; padding: 0 12px; border-radius: 8px; }
     .row:hover { background: var(--hover); }
-    .row.sel { background: var(--sel); }
+    .row.sel { background: var(--sel); box-shadow: inset 3px 0 0 var(--accent); }
     .row input[type=checkbox] { margin: 0; opacity: 0; flex: none; }
     .row:hover input[type=checkbox], body.selecting .row input[type=checkbox] { opacity: 1; }
     .row img { width: 16px; height: 16px; flex: none; border-radius: 3px; }
-    .row a { color: var(--text); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1 1 auto; min-width: 0; }
+    .row a { color: var(--text); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1 1 auto; min-width: 0; font-size: 13.5px; }
     .row a:hover { color: var(--accent); }
-    .row .url { color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 36%; min-width: 0; font-size: 12px; }
-    .row .age { color: var(--faint); font-size: 11px; width: 34px; text-align: right; flex: none; font-variant-numeric: tabular-nums; }
+    .row a .hint { color: var(--muted); font-size: 12px; margin-left: 8px; font-weight: 400; }
+    .row .url { color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 34%; min-width: 0; font-size: 12px; }
+    body.hide-urls .row .url { display: none; }
+    .row .tag { flex: none; font-size: 10px; font-weight: 600; letter-spacing: .03em; color: var(--accent); background: var(--accent-soft); border-radius: 4px; padding: 1px 6px; }
+    .row .age { color: var(--faint); font-size: 11px; min-width: 38px; text-align: right; flex: none; font-variant-numeric: tabular-nums; }
     .row .del { border: 0; background: none; color: var(--faint); padding: 2px 6px; opacity: 0; flex: none; }
     .row:hover .del { opacity: 1; }
     .row .del:hover { color: var(--danger); background: none; }
+    .row .chev { width: 14px; flex: none; color: var(--muted); font-size: 13px; text-align: center; transition: transform .12s; }
     .row.group { cursor: pointer; font-weight: 600; }
-    .row.group .chev { width: 10px; color: var(--faint); font-size: 10px; flex: none; }
-    .row.group .site { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .row.group .n { color: var(--muted); font-weight: 500; font-size: 11px; background: var(--hover); border-radius: 999px; padding: 1px 8px; }
+    .row.group .chev.open { transform: rotate(90deg); }
+    .row.group .site { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
+    .row.group .n { color: var(--muted); font-weight: 500; font-size: 11px; background: var(--hover); border-radius: 999px; padding: 2px 9px; }
     .row.group:hover .n { background: var(--bg); }
-    .row.nested { left: 34px; }
-    .empty { padding: 80px 40px; text-align: center; color: var(--muted); max-width: 440px; margin: 0 auto; }
-    .empty b { display: block; color: var(--text); font-size: 15px; margin-bottom: 6px; }
+    .row.nested { left: 58px; }
+    .empty { padding: 90px 40px; text-align: center; color: var(--muted); max-width: 460px; margin: 0 auto; }
+    .empty b { display: block; color: var(--text); font-size: 16px; margin-bottom: 6px; }
+    .empty button { margin-top: 16px; }
+    body.dropping main { outline: 3px dashed var(--accent); outline-offset: -10px; background: var(--accent-soft); }
 
-    /* ---------- dialog ---------- */
+    /* ---------- undo banner ---------- */
+    #toast {
+      position: fixed; left: calc(50% + 126px); bottom: 24px; transform: translate(-50%, 16px); opacity: 0; pointer-events: none;
+      display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 16px; border-radius: 12px;
+      background: var(--text); color: var(--bg); box-shadow: 0 12px 34px rgb(0 0 0 / .28); transition: .18s; white-space: nowrap;
+    }
+    #toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+    #toast button { background: none; border: 0; color: var(--bg); font-weight: 600; padding: 6px 10px; }
+    #toast button:hover { background: rgb(127 127 127 / .22); }
+
+    /* ---------- import dialog ---------- */
     dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--bg); color: var(--text); padding: 22px 24px; width: min(560px, 92vw); box-shadow: 0 20px 60px rgb(0 0 0 / .25); }
     dialog::backdrop { background: rgb(20 15 35 / .4); backdrop-filter: blur(2px); }
     dialog h2 { font-size: 17px; margin: 0 0 4px; }
@@ -89,10 +127,14 @@
   </style>
 </head>
 <body>
+  <button id="sidebarToggle" title="Show or hide the sidebar ( [ )"><img src="icons/icon48.png" alt="Toggle sidebar"></button>
   <aside>
-    <div class="brand"><img src="icons/icon48.png" alt=""><h1>Tab Vault</h1></div>
+    <div class="brand"><h1>Tab Vault</h1></div>
     <div class="side-actions">
-      <button id="saveSession" title="Save every open tab as its own named session, kept apart from the common list">Save tabs as session</button>
+      <button id="saveSession" title="Save every open tab as its own named session, kept apart from the common list">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        Save tabs as session
+      </button>
     </div>
     <div id="nav"></div>
     <div class="backup">
@@ -101,40 +143,53 @@
         <button id="backupNow" class="ghost" title="Save a backup to Downloads/TabVault now">Back up now</button>
       </div>
       <button id="export" title="Download everything as a JSON file">Export</button>
-      <button id="import" title="Merge a Tab Vault backup or a Session Buddy export into your data">Import</button>
+      <button id="import" title="Merge a Tab Vault backup or a Session Buddy export into your data. You can also drop the file on this page.">Import</button>
       <input type="file" id="file" accept=".json,application/json" hidden>
     </div>
   </aside>
   <main>
     <header>
-      <input type="search" id="q" placeholder="Search titles and URLs   /" autofocus>
+      <input type="search" id="q" autofocus>
+      <select id="source" title="Show links you saved, links the hourly auto-save caught, or both">
+        <option value="all">All saves</option>
+        <option value="mine">My saves</option>
+        <option value="auto">Auto-saved</option>
+      </select>
       <select id="sort" title="Sort order">
         <option value="url">URL A→Z</option>
         <option value="newest">Newest first</option>
         <option value="oldest">Oldest first</option>
       </select>
-      <button id="group" class="toggle" title="Collapse tabs into one row per website">Group by site</button>
+      <button id="group" class="toggle" title="Collapse tabs into one row per website">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        Group by site
+      </button>
+      <button id="urls" class="toggle" title="Show or hide the URL column">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
+        Show URLs
+      </button>
     </header>
     <div class="title-row">
       <h2 id="viewTitle"></h2>
-      <button id="merge" class="session-only">Merge into common list</button>
+      <span id="count"></span>
+      <span id="saved"></span>
+      <button id="selAll" class="ghost"></button>
+      <button id="merge" class="session-only primary">Merge into common list</button>
       <button id="rename" class="session-only ghost">Rename</button>
       <button id="delSession" class="session-only ghost danger">Delete</button>
     </div>
     <div id="cats"></div>
     <div id="status">
-      <span id="count"></span><span id="saved"></span>
-      <span class="grow"></span>
       <span id="selActions">
         <span id="selCount"></span>
         <button id="open">Open</button>
         <button id="del" class="danger">Delete</button>
-        <button id="selNone" class="ghost">Clear</button>
+        <button id="selNone" class="ghost" title="Clear selection (Esc)">Clear</button>
       </span>
-      <button id="selAll" class="ghost">Select all</button>
     </div>
     <div id="viewport"><div id="spacer"></div></div>
   </main>
+  <div id="toast" role="status"><span id="toastMsg"></span><button id="undo">Undo</button></div>
   <dialog id="sbDialog">
     <form method="dialog">
       <h2>Import from Session Buddy</h2>

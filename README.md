@@ -16,17 +16,18 @@ To update later, run `git pull` (or download again), then click the reload arrow
 
 - **Click the icon** to save every tab in every window and open the list.
 - **Alt+Shift+S** saves without opening the list.
-- **Save tabs as session…** in the sidebar saves the open tabs as a named session, kept apart from the main list.
+- **Auto-save:** every hour, open tabs are also merged in. Links only auto-save has caught get an **auto** tag, which goes away if you save the link yourself. The **All saves / My saves / Auto-saved** menu filters by this.
+- **Undo:** every delete can be undone for 10 seconds (the Undo button or Cmd/Ctrl+Z).
+- **Save tabs as session** at the top of the sidebar saves the open tabs as a named session, kept apart from the main list.
 
 In the list:
 
-- **Time views:** Today, Last 7 days, Last 30 days, Archive (not saved again for 30+ days), All time.
-- **Categories:** Google Search, YouTube, LinkedIn, Gmail, Drive & Docs, Other.
+- **Sidebar:** Today (the default), Last 7 days, Last 30 days, Archive (not saved again for 30+ days), All time, and your sessions. Backup, Export and Import are at the bottom.
 - **Search:** press `/`. Several words must all match.
-- **Sort:** by URL, newest saved, or oldest saved.
-- **Group by site:** collapses the list to one row per website.
+- **Header:** show all saves, only yours, or only auto-saves; sort by site A→Z (local addresses like localhost last), newest or oldest; Group by site; Show URLs.
+- **Chips:** your 10 biggest sites in the current view (subdomains count as one site, so every SolveIt dialog is under solve.it.com). Google is split into Search, Gmail and Drive & Docs.
 - **Open:** click a title to open it, or Cmd/Ctrl-click to open it in the background.
-- **Select:** click a row, or Shift-click to select a range.
+- **Select:** click a row, or Shift-click to select a range. Open and Delete appear above the list. Esc clears the selection.
 
 ## Coming from Session Buddy
 

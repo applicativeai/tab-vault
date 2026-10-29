@@ -40,9 +40,19 @@ async function openManager() {
 // older ones are deleted. Only files this extension created (by download id) are ever
 // deleted, so after a Chrome wipe your old backup files are left untouched.
 
-chrome.runtime.onInstalled.addListener(() => chrome.alarms.create('backup-check', { periodInMinutes: 6 * 60 }));
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.alarms.create('backup-check', { periodInMinutes: 6 * 60 });
+  chrome.alarms.create('autosave', { periodInMinutes: 60 });
+});
 chrome.runtime.onStartup.addListener(maybeBackup);
-chrome.alarms.onAlarm.addListener((a) => a.name === 'backup-check' && maybeBackup());
+chrome.alarms.onAlarm.addListener(async (a) => {
+  if (a.name === 'backup-check') maybeBackup();
+  // Hourly auto-save into the common list. New links get the "auto" tag.
+  if (a.name === 'autosave') {
+    await mergeIntoCommon((await captureOpenTabs()).map((e) => ({ ...e, auto: true })));
+    notifyChanged();
+  }
+});
 
 chrome.runtime.onMessage.addListener((m, _sender, reply) => {
   if (m.type !== 'backup-now') return;

@@ -97,7 +97,7 @@ export function prepare(tabs, now = Date.now()) {
     if (!map.has(key)) {
       const added = t.added ?? now;
       // added = first saved, seen = last saved (re-saving an open tab refreshes it)
-      map.set(key, { key, url: t.url, title: t.title || t.url, sortKey: sortKey(t.url), added, seen: t.seen ?? added });
+      map.set(key, { key, url: t.url, title: t.title || t.url, sortKey: sortKey(t.url), added, seen: t.seen ?? added, ...(t.auto && { auto: true }) });
     }
   }
   return [...map.values()].sort(bySortKey);
@@ -112,6 +112,7 @@ export async function captureOpenTabs({ currentWindowOnly = false } = {}) {
 
 // Adds entries that aren't already present. Returns { added, dupes }.
 // Links already present get their "last saved" time refreshed, which keeps them out of the Archive.
+// Entries marked `auto` came from the hourly auto-save; saving a link yourself removes that mark.
 export const mergeIntoCommon = (entries) => mergeInto('tabs', entries, true);
 
 async function mergeInto(storeName, entries, touch = false) {
@@ -123,8 +124,11 @@ async function mergeInto(storeName, entries, touch = false) {
       if (!old) {
         s.put(e);
         added++;
-      } else if (touch && e.seen > (old.seen ?? old.added)) {
-        s.put({ ...old, seen: e.seen });
+      } else if (touch) {
+        const next = { ...old };
+        if (e.seen > (old.seen ?? old.added)) next.seen = e.seen;
+        if (old.auto && !e.auto) delete next.auto;
+        if (next.seen !== old.seen || next.auto !== old.auto) s.put(next);
       }
     };
   }
@@ -256,14 +260,29 @@ export const CATEGORIES = [
   ['other', 'Other'],
 ];
 
+// Hosts that give each user or app its own subdomain; keep one more label so
+// "solve.it.com" stays distinct from other *.it.com sites.
+const SHARED_SUFFIXES = new Set(['it.com', 'github.io', 'vercel.app', 'netlify.app', 'pages.dev', 'herokuapp.com', 'web.app', 'firebaseapp.com']);
+
+// The main site: "abc123.solveit.fast.ai" -> "fast.ai", "news.bbc.co.uk" -> "bbc.co.uk".
+// IP addresses and single-label hosts like "localhost" are returned as-is.
 export function siteOf(url) {
+  let host;
   try {
     const u = new URL(url);
-    return u.hostname.replace(/^www\./, '') || u.protocol.replace(':', '');
+    host = u.hostname.replace(/^www\./, '') || u.protocol.replace(':', '');
   } catch {
     return url;
   }
+  const labels = host.split('.');
+  if (labels.length <= 2 || /^[\d.]+$/.test(host) || host.includes(':')) return host;
+  const last2 = labels.slice(-2).join('.');
+  const countryPair = labels.at(-1).length === 2 && ['co', 'com', 'org', 'net', 'ac', 'gov', 'edu'].includes(labels.at(-2));
+  return labels.slice(countryPair || SHARED_SUFFIXES.has(last2) ? -3 : -2).join('.');
 }
+
+// Local or throwaway hosts (IPs, localhost) sort after real sites.
+export const isLocalSite = (site) => !site.includes('.') || /^[\d.]+$/.test(site);
 
 export function category(url) {
   let u;
@@ -318,3 +337,4 @@ export async function importSessionBuddy(plan) {
   }
   return { added, sessions };
 }
+
